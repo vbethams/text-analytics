@@ -1,0 +1,88 @@
+---
+title: "Text Mining - Batch 3A"
+author: "Kathirmani Sukumar"
+date: "8/17/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(pdftools)
+library(tm)
+library(wordcloud)
+library(dplyr)
+```
+
+```{r}
+book = pdf_text('/Users/skathirmani/Documents/books/ISLR.pdf')
+reviews = read.csv('/datasets/amazon_reviews.csv')
+regex_func = function(x){ return (gsub('[^a-z ]', '', x)) }
+
+common_stop_words = stopwords()
+custom_stop_words = c('set', 'can', 'get', 'will',
+                      'using')
+all_stop_words = append(common_stop_words, custom_stop_words)
+docs = VCorpus(VectorSource(as.character(reviews$reviewText)))
+docs = tm_map(docs, content_transformer(tolower))
+docs = tm_map(docs, content_transformer(regex_func))
+docs = tm_map(docs, stripWhitespace)
+docs = tm_map(docs, removeWords, all_stop_words)
+dtm = DocumentTermMatrix(docs)
+df_dtm = as.data.frame(as.matrix(dtm))
+dim(df_dtm)
+```
+
+```{r}
+x = colSums(df_dtm)
+words_freq = data.frame(words=labels(x),
+                        freq=x)
+#words_freq %>% arrange(-freq) %>% head(50)
+wordcloud(words_freq$words,
+          words_freq$freq,
+          max.words = 100,
+          scale=c(3,0.1))
+```
+
+```{r}
+#Sys.setenv(JAVA_HOME='C:/Program Files/Java/jre-9.0.4')
+library(rJava)
+library(RWeka)
+BigramTokenizer <- function(x) NGramTokenizer(x, Weka_control(min=2, max=2))
+dtm_bigram = DocumentTermMatrix(docs, control=list(tokenize=BigramTokenizer))
+df_dtm_bigram = as.data.frame(as.matrix(dtm_bigram))
+
+x = colSums(df_dtm_bigram)
+bigrams_words_freq = data.frame(words=labels(x),
+                                freq=x)
+# bigrams_words_freq %>% arrange(-freq) %>% head(10)
+wordcloud(bigrams_words_freq$words,
+          bigrams_words_freq$freq,
+          max.words = 100,
+          scale=c(3,0.1))
+```
+
+
+```{r}
+negative_words = c('bad', 'waste', 'wastage', 'pathetic',
+                   'terrible', 'fraud', 'attrocious', 
+                   'horrible', 'bullshit', 'unsatisfied',
+                   'ridiculous', 'absurd')
+
+bigrams = colnames(df_dtm_bigram)
+
+for (bigram in bigrams){
+  words = unlist(strsplit(bigram, ' '))
+  if (length(intersect(negative_words, words))>0){
+    print(bigram)
+  }
+}
+```
+
+
+```{r}
+intersect(c('waste','tablet'), negative_words)
+```
+
