@@ -14,18 +14,22 @@ library(pdftools)
 library(tm)
 library(wordcloud)
 library(dplyr)
+library(topicmodels)
+library(tidytext)
+install.packages("topicmodels")
 ```
 
 ```{r}
 book = pdf_text('/Users/skathirmani/Documents/books/ISLR.pdf')
-reviews = read.csv('/datasets/amazon_reviews.csv')
+reviews = read.csv('/datasets/amazon_reviews_11.csv')
+hotstar = read.csv('/datasets/hotstar.allreviews_Sentiments.csv')
 regex_func = function(x){ return (gsub('[^a-z ]', '', x)) }
 
 common_stop_words = stopwords()
 custom_stop_words = c('set', 'can', 'get', 'will',
                       'using')
 all_stop_words = append(common_stop_words, custom_stop_words)
-docs = VCorpus(VectorSource(as.character(reviews$reviewText)))
+docs = VCorpus(VectorSource(as.character(hotstar$Reviews)))
 docs = tm_map(docs, content_transformer(tolower))
 docs = tm_map(docs, content_transformer(regex_func))
 docs = tm_map(docs, stripWhitespace)
@@ -73,16 +77,117 @@ negative_words = c('bad', 'waste', 'wastage', 'pathetic',
 
 bigrams = colnames(df_dtm_bigram)
 
+negative_bigrams = c()
 for (bigram in bigrams){
   words = unlist(strsplit(bigram, ' '))
   if (length(intersect(negative_words, words))>0){
-    print(bigram)
+    negative_bigrams = append(negative_bigrams, bigram)
   }
 }
+
+head(sort(colSums(df_dtm_bigram[, negative_bigrams]), decreasing = T), 5)
+```
+
+
+### Word similarity
+```{r}
+library(lsa)
+word1_vec = df_dtm[, 'kindle']
+word2_vec = df_dtm[, 'book']
+lsa::cosine(word1_vec, word2_vec)
 ```
 
 
 ```{r}
-intersect(c('waste','tablet'), negative_words)
+words_similar = function(word, df_dtm, n){
+  word2_compare = c()
+  word1_vec = df_dtm[, word]
+  words_cs = c()
+  for (w in colnames(df_dtm)){
+    if(word != w){
+      word2_vec = df_dtm[, w]
+      cs = cosine(word1_vec, word2_vec)[1]
+      word2_compare = append(word2_compare, w)
+      words_cs = append(words_cs, cs)
+    }
+  }
+  result = data.frame(word=word2_compare, cosine=words_cs)
+  result = result %>% arrange(-cosine) %>% head(n)
+  return (result)
+  
+}
+words_similar('kindle', df_dtm, 10)
+```
+
+
+
+
+### Document Similarity
+```{r}
+documents_similar = function(doc_row, df_dtm){
+  document_rows = c()
+  cosine_values = c()
+  doc1_vec = as.numeric(df_dtm[doc_row, ])
+  for (row in seq(1, nrow(df_dtm))){
+    if (row != doc_row){
+      doc2_vec = as.numeric(df_dtm[row, ])
+      cs = lsa::cosine(doc1_vec, doc2_vec)[1]
+      document_rows = append(document_rows, row)
+      cosine_values = append(cosine_values, cs)
+    }
+  }
+  result = data.frame("doc_no"=document_rows, "cosine"=cosine_values)
+  result = result %>% arrange(-cosine) %>% head(5)
+  return (result)
+}
+documents_similar(10, df_dtm)
+```
+
+
+### Sentiment Analysis
+
+#### Unsuperised methods
+```{r}
+library(RSentiment)
+calculate_score(c('Teaching is pathetic',
+                      'I do not like data science',
+                      'But gives good package and its an illusion',
+                      'I do not like R codding'))
+
+```
+
+```{r}
+sentiments = calculate_score(head(as.character(reviews$reviewText)))
+hist(sentiments)
+```
+
+
+### Supervised Analysis
+```{r}
+#View(hotstar %>% select(Reviews, Sentiment_Manual))
+df_dtm$sentiment = hotstar$Sentiment_Manual
+train = df_dtm[1:3000,]
+test = df_dtm[3001:nrow(df_dtm),]
+library(randomForest)
+library(rpart)
+
+model = rpart(sentiment~., data=train)
+test$sentiment_pred = predict(model, test, type='class')
+
+sum(test$sentiment == test$sentiment_pred) / nrow(test) * 100
+```
+
+### High dimensional reduction
+```{r}
+dtm_nonsparse = removeSparseTerms(dtm, sparse = 0.98)
+df_dtm_nonsparse = as.data.frame(as.matrix(dtm_nonsparse))
+dim(df_dtm_nonsparse)
+```
+
+
+```{r}
+dtm_nonsparse = removeSparseTerms(dtm, sparse=0.95)
+dtm_nonsparse = dtm_nonsparse[rowSums(as.matrix(dtm_nonsparse))>0,]
+lda.out = LDA(dtm_nonsparse, 4, method='Gibbs')
 ```
 
