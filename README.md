@@ -33,3 +33,7 @@
 - Install [Mongodb](https://www.mongodb.com/download-center#community)
 - Create a twitter account
 - Create a facebook account
+
+
+### References
+- [Text Summarization](https://www.cs.cmu.edu/afs/cs/project/jair/pub/volume22/erkan04a-html/erkan04a.html)
