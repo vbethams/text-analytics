@@ -16,7 +16,7 @@ library(wordcloud)
 library(dplyr)
 library(topicmodels)
 library(tidytext)
-install.packages("topicmodels")
+library(ggplot2)
 ```
 
 ```{r}
@@ -29,7 +29,7 @@ common_stop_words = stopwords()
 custom_stop_words = c('set', 'can', 'get', 'will',
                       'using')
 all_stop_words = append(common_stop_words, custom_stop_words)
-docs = VCorpus(VectorSource(as.character(hotstar$Reviews)))
+docs = VCorpus(VectorSource(as.character(reviews$reviewText)))
 docs = tm_map(docs, content_transformer(tolower))
 docs = tm_map(docs, content_transformer(regex_func))
 docs = tm_map(docs, stripWhitespace)
@@ -37,6 +37,7 @@ docs = tm_map(docs, removeWords, all_stop_words)
 dtm = DocumentTermMatrix(docs)
 df_dtm = as.data.frame(as.matrix(dtm))
 dim(df_dtm)
+inspect(docs[[1]])
 ```
 
 ```{r}
@@ -189,5 +190,39 @@ dim(df_dtm_nonsparse)
 dtm_nonsparse = removeSparseTerms(dtm, sparse=0.95)
 dtm_nonsparse = dtm_nonsparse[rowSums(as.matrix(dtm_nonsparse))>0,]
 lda.out = LDA(dtm_nonsparse, 4, method='Gibbs')
+
+word2topic = tidy(lda.out, matrix="beta")
+doc2topic = tidy(lda.out, matrix="gamma")
+View(word2topic)
+View(doc2topic)
+```
+
+
+```{r}
+common_stop_words = stopwords()
+custom_stop_words = c('set', 'can', 'get', 'will',
+                      'using', 'use', 'good', 'well', 'bought', 'great',
+                      'just', 'one', 'time', 'still', 'now')
+all_stop_words = append(common_stop_words, custom_stop_words)
+docs = VCorpus(VectorSource(as.character(reviews$reviewText)))
+docs = tm_map(docs, content_transformer(tolower))
+docs = tm_map(docs, content_transformer(regex_func))
+docs = tm_map(docs, stripWhitespace)
+docs = tm_map(docs, removeWords, all_stop_words)
+dtm = DocumentTermMatrix(docs)
+df_dtm = as.data.frame(as.matrix(dtm))
+
+dtm_nonsparse = removeSparseTerms(dtm, sparse=0.95)
+dtm_nonsparse = dtm_nonsparse[rowSums(as.matrix(dtm_nonsparse))>0,]
+lda.out = LDA(dtm_nonsparse, 4, method='Gibbs')
+
+word2topic = tidy(lda.out, matrix="beta")
+doc2topic = tidy(lda.out, matrix="gamma")
+
+
+word2topic %>% group_by(topic) %>% 
+  arrange(topic, -beta) %>% top_n(5) %>% 
+  ggplot(aes(x=reorder(term, beta), y=beta)) + geom_bar(stat='identity') + 
+  facet_wrap(~topic, scales='free') + coord_flip()
 ```
 
